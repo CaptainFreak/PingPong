@@ -1,0 +1,10 @@
+#!/bin/bash
+
+apt-get update
+apt-get install clang
+apt-get install libsdl2-2.0
+apt-get install libsdl2-dev
+apt-get install libsdl2-image-2.0
+apt-get install libsdl2-image-dev
+
+make
