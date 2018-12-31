@@ -121,33 +121,43 @@ int main(int argc, char *argv[]){
 
 
 	int sock,length,n;
-	struct sockaddr_in server,from;
+	//struct sockaddr_in server,from;
+	struct sockaddr_in6 server,from;
 	struct hostent *hp;
 	char buffer[256];
 
-	sock=socket(AF_INET,SOCK_DGRAM,0);
+	//sock=socket(AF_INET,SOCK_DGRAM,0);
+	sock=socket(AF_INET6,SOCK_DGRAM,0);
 
 	if(sock<0){
 		error("error occured while creating socket.\n");
 	}
 
-	server.sin_family=AF_INET;
-	hp=gethostbyname("localhost");
+	//server.sin_family=AF_INET;
+	//hp=gethostbyname("localhost");
 	
-	if(hp==0){
-		error("Unknown host specified.\n");
-	}
+	//if(hp==0){
+	//	error("Unknown host specified.\n");
+	//}
 
-	bcopy((char *)hp->h_addr,(char *)&server.sin_addr,hp->h_length);
+	//bcopy((char *)hp->h_addr,(char *)&server.sin_addr,hp->h_length);
+	//int p=atoi(argv[1]);
+	//if(p==1)
+	//server.sin_port=htons(atoi("1337"));
+	//if(p==2)
+	//server.sin_port=htons(atoi("1338"));
+	//length=sizeof(struct sockaddr_in);
+
+	memset(&server, 0, sizeof(server));
+	server.sin6_family=AF_INET6;
 	int p=atoi(argv[1]);
 	if(p==1)
-	server.sin_port=htons(atoi("1337"));
+		server.sin6_port=htons(atoi("9001"));
 	if(p==2)
-	server.sin_port=htons(atoi("1338"));
-	length=sizeof(struct sockaddr_in);
-
-
-
+		server.sin6_port=htons(atoi("9002"));
+	char *host_ip=argv[2];
+	inet_pton(AF_INET6, host_ip, &(server.sin6_addr));
+	length=sizeof(struct sockaddr_in6);
 
 	while(!close_req){
 		SDL_Event event;
