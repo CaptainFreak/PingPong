@@ -67,8 +67,12 @@ int main(int argc,char *argv[]){
 	fromlen2=sizeof(struct sockaddr_in6);
 
 	while(1){
-		n=recvfrom(sock,buf,1024,0,(struct sockaddr *)&from,&fromlen);
-		n2=recvfrom(sock2,buf2,1024,0,(struct sockaddr *)&from2,&fromlen);
+		int p1buf[4];
+		int p2buf[2];
+		//n=recvfrom(sock,buf,1024,0,(struct sockaddr *)&from,&fromlen);
+		//n2=recvfrom(sock2,buf2,1024,0,(struct sockaddr *)&from2,&fromlen);
+		n=recvfrom(sock,p1buf,sizeof(int)*4,0,(struct sockaddr *)&from,&fromlen);
+		n2=recvfrom(sock2,p2buf,sizeof(int)*2,0,(struct sockaddr *)&from2,&fromlen);
 		if(n<0){
 			error("recvfrom");
 		}	
@@ -76,12 +80,14 @@ int main(int argc,char *argv[]){
 			error("recvfrom2");
 		}	
 
-		write(1,"recieved a datagram:",21);
-		write(1,buf,n);
-		write(1,"recieved a datagram from 2:",27);
-		write(1,buf2,n2);
-		n=sendto(sock,buf2,17,0,(struct sockaddr *)&from,fromlen);
-		n2=sendto(sock2,buf,17,0,(struct sockaddr *)&from2,fromlen2);
+		//write(1,"recieved a datagram:",21);
+		//write(1,buf,n);
+		//write(1,"recieved a datagram from 2:",27);
+		//write(1,buf2,n2);
+		//n=sendto(sock,buf2,17,0,(struct sockaddr *)&from,fromlen);
+		//n2=sendto(sock2,buf,17,0,(struct sockaddr *)&from2,fromlen2);
+		n=sendto(sock,p2buf,sizeof(int)*2,0,(struct sockaddr *)&from,fromlen);
+		n2=sendto(sock2,p1buf,sizeof(int)*4,0,(struct sockaddr *)&from2,fromlen2);
 
 		if(n<0 ){
 			error("error occured while sending.\n");

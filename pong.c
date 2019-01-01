@@ -307,43 +307,61 @@ int main(int argc, char *argv[]){
 		plank2_dest.x=(int)plank2_x_pos;
 		
 		if(p==1){
+			int p1buf[4];
+			p1buf[0] = htonl(dest.x);
+			p1buf[1] = htonl(dest.y);
+			p1buf[2] = htonl(plank_dest.x);
+			p1buf[3] = htonl(plank_dest.y);
 			//printf("adsad\n",n);
-			bzero(buffer,256);
-			sprintf(buffer,"%d;%d;%d;%d",dest.x,dest.y,plank_dest.x,plank_dest.y);
-			n=sendto(sock,buffer,strlen(buffer),0,&server,length);
-			printf("%s\n",buffer);
+			//bzero(buffer,256);
+			//sprintf(buffer,"%d;%d;%d;%d",dest.x,dest.y,plank_dest.x,plank_dest.y);
+			//n=sendto(sock,buffer,strlen(buffer),0,&server,length);
+			n=sendto(sock, p1buf, sizeof(int)*4, 0, &server, length);
+			//printf("%s\n",buffer);
 			if(n<0){
 				error("error occured while sending.\n");
 			}	
 
-			n=recvfrom(sock,buffer,256,0,&from,&length);
+			//n=recvfrom(sock,buffer,256,0,&from,&length);
+			n=recvfrom(sock,p1buf,sizeof(int)*2,0,&from,&length);
 			if(n<0){
 				error("error occured while recieving in p2.\n");
 			}
+			plank2_dest.x = ntohl(p1buf[0]);
+			plank2_dest.y = ntohl(p1buf[1]);
 
-			write(1,"Got acknowledgement: ",20);
-			write(1,buffer,n);
-			sscanf(buffer,"%d;%d;",&plank2_dest.x,&plank2_dest.y);
+			//write(1,"Got acknowledgement: ",20);
+			//write(1,buffer,n);
+			//sscanf(buffer,"%d;%d;",&plank2_dest.x,&plank2_dest.y);
 
 		}
 
 		if(p==2){
-			
-			bzero(buffer,256);
-			sprintf(buffer,"%d;%d",plank2_dest.x,plank2_dest.y);
-			n=sendto(sock,buffer,strlen(buffer),0,&server,length);
+			int p2buf[4];
+			p2buf[0] = htonl(plank2_dest.x);
+			p2buf[1] = htonl(plank2_dest.y);
+
+			//bzero(buffer,256);
+			//sprintf(buffer,"%d;%d",plank2_dest.x,plank2_dest.y);
+			//n=sendto(sock,buffer,strlen(buffer),0,&server,length);
+			n=sendto(sock,p2buf,sizeof(int)*2,0,&server,length);
 			if(n<0){
 				error("error occured while sending.\n");
 			}
 
-			n=recvfrom(sock,buffer,256,0,&from,&length);
+			//n=recvfrom(sock,buffer,256,0,&from,&length);
+			n=recvfrom(sock,p2buf,sizeof(int)*4,0,&from,&length);
 			if(n<0){
 				error("error occured while recieving in p2.\n");
 			}
 
-			write(1,"Got acknowledgement: ",20);
-			write(1,buffer,n);
-			sscanf(buffer,"%d;%d;%d;%d",&dest.x,&dest.y,&plank_dest.x,&plank_dest.y);
+			dest.x = ntohl(p2buf[0]);
+			dest.y = ntohl(p2buf[1]);
+			plank_dest.x = ntohl(p2buf[2]);
+			plank_dest.y = ntohl(p2buf[3]);
+			//write(1,"Got acknowledgement: ",20);
+			//write(1,buffer,n);
+			//sscanf(buffer,"%d;%d;%d;%d",&dest.x,&dest.y,&plank_dest.x,&plank_dest.y);
 	
 		}
 		SDL_RenderClear(rend);
