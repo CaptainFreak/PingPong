@@ -126,6 +126,9 @@ int main(int argc, char *argv[]){
 	struct hostent *hp;
 	char buffer[256];
 
+	int p1buf[4];
+	int p2buf[4];
+
 	//sock=socket(AF_INET,SOCK_DGRAM,0);
 	sock=socket(AF_INET6,SOCK_DGRAM,0);
 
@@ -307,7 +310,6 @@ int main(int argc, char *argv[]){
 		plank2_dest.x=(int)plank2_x_pos;
 		
 		if(p==1){
-			int p1buf[4];
 			p1buf[0] = htonl(dest.x);
 			p1buf[1] = htonl(dest.y);
 			p1buf[2] = htonl(plank_dest.x);
@@ -320,7 +322,7 @@ int main(int argc, char *argv[]){
 			//printf("%s\n",buffer);
 			if(n<0){
 				error("error occured while sending.\n");
-			}	
+			}
 
 			//n=recvfrom(sock,buffer,256,0,&from,&length);
 			n=recvfrom(sock,p1buf,sizeof(int)*2,0,&from,&length);
@@ -329,6 +331,7 @@ int main(int argc, char *argv[]){
 			}
 			plank2_dest.x = ntohl(p1buf[0]);
 			plank2_dest.y = ntohl(p1buf[1]);
+			printf("got %d %d\n", plank2_dest.x, plank2_dest.y);
 
 			//write(1,"Got acknowledgement: ",20);
 			//write(1,buffer,n);
@@ -337,7 +340,6 @@ int main(int argc, char *argv[]){
 		}
 
 		if(p==2){
-			int p2buf[4];
 			p2buf[0] = htonl(plank2_dest.x);
 			p2buf[1] = htonl(plank2_dest.y);
 
@@ -362,7 +364,8 @@ int main(int argc, char *argv[]){
 			//write(1,"Got acknowledgement: ",20);
 			//write(1,buffer,n);
 			//sscanf(buffer,"%d;%d;%d;%d",&dest.x,&dest.y,&plank_dest.x,&plank_dest.y);
-	
+			
+			printf("got %d %d %d %d\n", dest.x, dest.y, plank_dest.x, plank_dest.y);
 		}
 		SDL_RenderClear(rend);
 		SDL_RenderCopy(rend,tex,NULL,&dest);
