@@ -71,15 +71,19 @@ int main(int argc,char *argv[]){
 	while(1){
 		//n=recvfrom(sock,buf,1024,0,(struct sockaddr *)&from,&fromlen);
 		//n2=recvfrom(sock2,buf2,1024,0,(struct sockaddr *)&from2,&fromlen);
+		printf("receiving from player 1\n");
 		n=recvfrom(sock,p1buf,sizeof(int)*4,0,(struct sockaddr *)&from,&fromlen);
+		printf("receiving from player 2\n");
 		n2=recvfrom(sock2,p2buf,sizeof(int)*2,0,(struct sockaddr *)&from2,&fromlen);
+		
+		
 		printf("p1: %d %d %d %d\n",
 			ntohl(p1buf[0]),
 			ntohl(p1buf[1]),
 			ntohl(p1buf[2]),
 			ntohl(p1buf[3])
 		);
-		printf("p2: %d %d\n\n",
+		printf("p2: %d %d\n",
 			ntohl(p2buf[0]),
 			ntohl(p2buf[1])
 		);
@@ -96,7 +100,9 @@ int main(int argc,char *argv[]){
 		//write(1,buf2,n2);
 		//n=sendto(sock,buf2,17,0,(struct sockaddr *)&from,fromlen);
 		//n2=sendto(sock2,buf,17,0,(struct sockaddr *)&from2,fromlen2);
+		printf("sending to player 1\n");
 		n=sendto(sock,p2buf,sizeof(int)*2,0,(struct sockaddr *)&from,fromlen);
+		printf("sending to player 2\n");
 		n2=sendto(sock2,p1buf,sizeof(int)*4,0,(struct sockaddr *)&from2,fromlen2);
 
 		if(n<0 ){
@@ -107,7 +113,7 @@ int main(int argc,char *argv[]){
 		}
 
 
-
+		printf("\n");
 	}
 
 return 0;

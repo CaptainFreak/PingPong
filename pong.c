@@ -318,6 +318,7 @@ int main(int argc, char *argv[]){
 			//bzero(buffer,256);
 			//sprintf(buffer,"%d;%d;%d;%d",dest.x,dest.y,plank_dest.x,plank_dest.y);
 			//n=sendto(sock,buffer,strlen(buffer),0,&server,length);
+			printf("sending to server\n");
 			n=sendto(sock, p1buf, sizeof(int)*4, 0, &server, length);
 			//printf("%s\n",buffer);
 			if(n<0){
@@ -325,6 +326,7 @@ int main(int argc, char *argv[]){
 			}
 
 			//n=recvfrom(sock,buffer,256,0,&from,&length);
+			printf("receiving from server\n");
 			n=recvfrom(sock,p1buf,sizeof(int)*2,0,&from,&length);
 			if(n<0){
 				error("error occured while recieving in p2.\n");
@@ -337,6 +339,7 @@ int main(int argc, char *argv[]){
 			//write(1,buffer,n);
 			//sscanf(buffer,"%d;%d;",&plank2_dest.x,&plank2_dest.y);
 
+			printf("\n");
 		}
 
 		if(p==2){
@@ -346,12 +349,14 @@ int main(int argc, char *argv[]){
 			//bzero(buffer,256);
 			//sprintf(buffer,"%d;%d",plank2_dest.x,plank2_dest.y);
 			//n=sendto(sock,buffer,strlen(buffer),0,&server,length);
+			printf("sending to server\n");
 			n=sendto(sock,p2buf,sizeof(int)*2,0,&server,length);
 			if(n<0){
 				error("error occured while sending.\n");
 			}
 
 			//n=recvfrom(sock,buffer,256,0,&from,&length);
+			printf("receiving from server\n");
 			n=recvfrom(sock,p2buf,sizeof(int)*4,0,&from,&length);
 			if(n<0){
 				error("error occured while recieving in p2.\n");
@@ -366,6 +371,7 @@ int main(int argc, char *argv[]){
 			//sscanf(buffer,"%d;%d;%d;%d",&dest.x,&dest.y,&plank_dest.x,&plank_dest.y);
 			
 			printf("got %d %d %d %d\n", dest.x, dest.y, plank_dest.x, plank_dest.y);
+			printf("\n");
 		}
 		SDL_RenderClear(rend);
 		SDL_RenderCopy(rend,tex,NULL,&dest);
