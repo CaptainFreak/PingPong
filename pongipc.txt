@@ -1,0 +1,39 @@
+serverthread1:
+  sendto p1 "connection granted"
+  while recvfrom p1 == "connect please":
+    sendto p1 "connection granted"
+  while true:
+    recvfrom p1 "info"
+    sendto p2 "info"
+
+serverthread2:
+  sendto p2 "connection granted"
+  while recvfrom p2 == "connect please":
+    sendto p2 "connection granted"
+  while true:
+    recvfrom p2 "info"
+    sendto p1 "info"
+
+servermain:
+  recvfrom p1 "connect please"
+  recvfrom p2 "connect please"
+  // confirmed two are ready for game
+  spawn serverthread1
+  spawn serverthread2
+
+playermain:
+  spawn playerthread1
+  while not connected:
+    sendto s "connect please"
+  while true:
+    update game data
+    sendto s "info"
+
+playerthread1:
+  recvfrom s "connection granted"
+  down(mutex)
+  connected = true
+  up(mutex)
+  while true:
+    recvfrom s "info"
+    modify data

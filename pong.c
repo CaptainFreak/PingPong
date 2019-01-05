@@ -1,7 +1,7 @@
 
 /*
 		2D PingPong(Multiplayer)
-	
+
 --UDP based Server-Client model
 Author:CaptainFreak
 
@@ -16,13 +16,28 @@ Author:CaptainFreak
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
-
+#include <pthread.h>
 
 #define WINDOW_WIDTH (640)
 #define WINDOW_HEIGHT (480)
 #define SPEED (300)
 #define h_addr h_addr_list[0]
 
+struct player_thread_info {
+	int player_number;
+	int recv_socket;
+	int *write_dest[4]; // array of pointers, each pointer points to an int
+};
+
+// physics globals
+SDL_Rect dest,plank_dest,plank2_dest;
+
+// "connected" will allow main thread to begin only when there is a connection
+pthread_mutex_t connected_mutex = PTHREAD_MUTEX_INITIALIZER;
+int connected = 0;
+// "physics" will allow "updateOpponentPosition" thread to update physics
+// "physics" will also allow main thread to read physics
+pthread_mutex_t physics_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void error(char *msg){
 
@@ -30,7 +45,34 @@ void error(char *msg){
 	exit(0);
 }
 
+// thread that gets opponent position from the host
+void *updateOpponentPosition(void *ptr) {
+	int buf[4];
+	int n, looplen;
+	struct sockaddr_in6 server;
+	int servlen = sizeof(struct sockaddr_in6);
+	struct player_thread_info *pti = (struct player_thread_info *) ptr;
+	
+	// get "connection granted" = [-1, -1, -1, -1], and begin main game loop
+	n = recvfrom(pti->recv_socket, buf, sizeof(int) * 4, 0,
+		&server, &servlen);
+	pthread_mutex_lock(&connected_mutex);
+	connected = 1;
+	pthread_mutex_unlock(&connected_mutex);
 
+	// player 1 only needs to write to two locations; p2 writes to four
+	looplen = pti->player_number * 2;
+	// side game loop, listens for recv
+	while(1) {
+		n = recvfrom(pti->recv_socket, buf, sizeof(int) * 4, 0,
+			&server, &servlen);
+		pthread_mutex_lock(&physics_mutex);
+		for(int i = 0; i < looplen; i++) {
+			*(pti->write_dest[i]) = ntohl(buf[i]);
+		}
+		pthread_mutex_unlock(&physics_mutex);
+	}
+}
 
 int main(int argc, char *argv[]){
 
@@ -84,7 +126,7 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
-	SDL_Rect dest,plank_dest,plank2_dest;
+	//SDL_Rect dest,plank_dest,plank2_dest;
 	SDL_QueryTexture(tex,NULL,NULL,&dest.w,&dest.h);
 	dest.w/=30;
 	dest.h/=30;
@@ -119,48 +161,62 @@ int main(int argc, char *argv[]){
 	int score=0;
 	int score2=0;
 
+	int p1buf[4], p2buf[4];
 
-	int sock,length,n;
-	//struct sockaddr_in server,from;
+	// network part
+	int sock, length, n;
 	struct sockaddr_in6 server,from;
-	struct hostent *hp;
 	char buffer[256];
 
-	int p1buf[4];
-	int p2buf[4];
-
-	//sock=socket(AF_INET,SOCK_DGRAM,0);
-	sock=socket(AF_INET6,SOCK_DGRAM,0);
-
-	if(sock<0){
+	sock = socket(AF_INET6, SOCK_DGRAM, 0);
+	if(sock < 0){
 		error("error occured while creating socket.\n");
 	}
 
-	//server.sin_family=AF_INET;
-	//hp=gethostbyname("localhost");
-	
-	//if(hp==0){
-	//	error("Unknown host specified.\n");
-	//}
-
-	//bcopy((char *)hp->h_addr,(char *)&server.sin_addr,hp->h_length);
-	//int p=atoi(argv[1]);
-	//if(p==1)
-	//server.sin_port=htons(atoi("1337"));
-	//if(p==2)
-	//server.sin_port=htons(atoi("1338"));
-	//length=sizeof(struct sockaddr_in);
-
+	// fill in server information, so we can send to server
 	memset(&server, 0, sizeof(server));
-	server.sin6_family=AF_INET6;
-	int p=atoi(argv[1]);
+	server.sin6_family = AF_INET6;
+	int p = atoi(argv[1]);
 	if(p==1)
-		server.sin6_port=htons(atoi("9001"));
+		server.sin6_port = htons(atoi("9001"));
 	if(p==2)
-		server.sin6_port=htons(atoi("9002"));
-	char *host_ip=argv[2];
+		server.sin6_port = htons(atoi("9002"));
+	char *host_ip = argv[2];
 	inet_pton(AF_INET6, host_ip, &(server.sin6_addr));
-	length=sizeof(struct sockaddr_in6);
+	length = sizeof(struct sockaddr_in6);
+
+	// threading part
+	pthread_t recv_thread;
+	int ret;
+	struct player_thread_info pti;
+	
+	pti.player_number = p;
+	pti.recv_socket = sock;
+	if(p == 1) {
+		pti.write_dest[0] = &(plank2_dest.x);
+		pti.write_dest[1] = &(plank2_dest.y);
+		pti.write_dest[2] = NULL;
+		pti.write_dest[3] = NULL;
+	} else if(p == 2) {
+		pti.write_dest[0] = &(dest.x);
+		pti.write_dest[1] = &(dest.y);
+		pti.write_dest[2] = &(plank_dest.x);
+		pti.write_dest[3] = &(plank_dest.y);
+	}
+	
+	ret = pthread_create(&recv_thread, NULL, updateOpponentPosition,
+		(void *) &pti);
+
+	// repeatedly tell server you are willing to connect
+	int ready_message[4] = { htonl(-1), htonl(-1), htonl(-1), htonl(-1) };
+	pthread_mutex_lock(&connected_mutex);
+	while(connected == 0) {
+		pthread_mutex_unlock(&connected_mutex);
+		n = sendto(sock, ready_message, sizeof(int) * 4, 0,
+			&server, length);
+		pthread_mutex_lock(&connected_mutex);
+	}
+	pthread_mutex_unlock(&connected_mutex);
 
 	while(!close_req){
 		SDL_Event event;
@@ -229,6 +285,7 @@ int main(int argc, char *argv[]){
 
 
 	if(p==1){
+		// update the ball
 		if(x_pos<=0){
 			x_pos=0;
 			x_vel=-x_vel;
@@ -247,14 +304,14 @@ int main(int argc, char *argv[]){
 		}
 		if(x_pos>=WINDOW_WIDTH-dest.w-plank_dest.w && (y_pos>=plank_y_pos-dest.h && y_pos<=plank_y_pos+plank_dest.h)){
 			score++;
-			printf("%d\n",score);
+			//printf("%d\n",score);
 			x_pos=WINDOW_WIDTH-dest.w-plank_dest.w;
 			x_vel=-x_vel;
 		}
 
 	
 
-
+		// update player 1 plank
 		if(plank_y_pos<=0){
 			plank_y_pos=0;
 		}
@@ -273,13 +330,13 @@ int main(int argc, char *argv[]){
 
 		if(x_pos<=plank2_dest.w && (y_pos>=plank2_y_pos-dest.h && y_pos<=plank2_y_pos+plank2_dest.h)){
 			score2++;
-			printf("player 2:%d\n",score);
+			//printf("player 2:%d\n",score);
 			x_pos=plank2_dest.w;
 			x_vel=-x_vel;
 		}
 
 	}if(p==2){	
-
+		// update player 2 plank
 		if(plank2_y_pos<=0){
 			plank2_y_pos=0;
 		}
@@ -300,79 +357,55 @@ int main(int argc, char *argv[]){
 
 		x_pos+=x_vel/60;
 		y_pos+=y_vel/60;
-		dest.y=(int)y_pos;
-		dest.x=(int)x_pos;
 		plank_y_pos+=plank_y_vel/50;
 		plank2_y_pos+=plank2_y_vel/50;
-		plank_dest.y=(int)plank_y_pos;
-		plank_dest.x=(int)plank_x_pos;
-		plank2_dest.y=(int)plank2_y_pos;
-		plank2_dest.x=(int)plank2_x_pos;
 		
+		// critical region start
+		pthread_mutex_lock(&physics_mutex);
+
+		// this thread updates one part of physics data
+		// the other thread (the listener) updates the second part
+		if(p == 1) {
+			dest.y=(int)y_pos;
+			dest.x=(int)x_pos;
+			plank_dest.y=(int)plank_y_pos;
+			plank_dest.x=(int)plank_x_pos;
+		} else if(p == 2) {
+			plank2_dest.y=(int)plank2_y_pos;
+			plank2_dest.x=(int)plank2_x_pos;
+		}
+
 		if(p==1){
+			// send position data of ball and player 1 to server
+			
+			// TODO: locks
+			// prepare data
 			p1buf[0] = htonl(dest.x);
 			p1buf[1] = htonl(dest.y);
 			p1buf[2] = htonl(plank_dest.x);
 			p1buf[3] = htonl(plank_dest.y);
-			//printf("adsad\n",n);
-			//bzero(buffer,256);
-			//sprintf(buffer,"%d;%d;%d;%d",dest.x,dest.y,plank_dest.x,plank_dest.y);
-			//n=sendto(sock,buffer,strlen(buffer),0,&server,length);
-			printf("sending to server\n");
-			n=sendto(sock, p1buf, sizeof(int)*4, 0, &server, length);
-			//printf("%s\n",buffer);
-			if(n<0){
+			// send data
+			n = sendto(sock, p1buf, sizeof(int) * 4, 0, &server, length);
+			if(n < 0){
 				error("error occured while sending.\n");
 			}
-
-			//n=recvfrom(sock,buffer,256,0,&from,&length);
-			printf("receiving from server\n");
-			n=recvfrom(sock,p1buf,sizeof(int)*2,0,&from,&length);
-			if(n<0){
-				error("error occured while recieving in p2.\n");
-			}
-			plank2_dest.x = ntohl(p1buf[0]);
-			plank2_dest.y = ntohl(p1buf[1]);
-			printf("got %d %d\n", plank2_dest.x, plank2_dest.y);
-
-			//write(1,"Got acknowledgement: ",20);
-			//write(1,buffer,n);
-			//sscanf(buffer,"%d;%d;",&plank2_dest.x,&plank2_dest.y);
-
-			printf("\n");
 		}
 
 		if(p==2){
+			// send position data of player 2 to server
+			
+			// prepare data
 			p2buf[0] = htonl(plank2_dest.x);
 			p2buf[1] = htonl(plank2_dest.y);
-
-			//bzero(buffer,256);
-			//sprintf(buffer,"%d;%d",plank2_dest.x,plank2_dest.y);
-			//n=sendto(sock,buffer,strlen(buffer),0,&server,length);
-			printf("sending to server\n");
-			n=sendto(sock,p2buf,sizeof(int)*2,0,&server,length);
-			if(n<0){
+			p2buf[2] = 0; // nothing
+			p2buf[3] = 0; // nothing
+			// send data
+			n=sendto(sock, p2buf, sizeof(int) * 4, 0, &server, length);
+			if(n < 0){
 				error("error occured while sending.\n");
 			}
-
-			//n=recvfrom(sock,buffer,256,0,&from,&length);
-			printf("receiving from server\n");
-			n=recvfrom(sock,p2buf,sizeof(int)*4,0,&from,&length);
-			if(n<0){
-				error("error occured while recieving in p2.\n");
-			}
-
-			dest.x = ntohl(p2buf[0]);
-			dest.y = ntohl(p2buf[1]);
-			plank_dest.x = ntohl(p2buf[2]);
-			plank_dest.y = ntohl(p2buf[3]);
-			//write(1,"Got acknowledgement: ",20);
-			//write(1,buffer,n);
-			//sscanf(buffer,"%d;%d;%d;%d",&dest.x,&dest.y,&plank_dest.x,&plank_dest.y);
-			
-			printf("got %d %d %d %d\n", dest.x, dest.y, plank_dest.x, plank_dest.y);
-			printf("\n");
 		}
+
 		SDL_RenderClear(rend);
 		SDL_RenderCopy(rend,tex,NULL,&dest);
 		SDL_RenderCopy(rend,pla,NULL,&plank_dest);
@@ -380,12 +413,15 @@ int main(int argc, char *argv[]){
 		SDL_RenderPresent(rend);
 		SDL_Delay(1000/60);
 
-
+		// critical region end
+		pthread_mutex_unlock(&physics_mutex);
 	}
 
 	SDL_DestroyTexture(tex);
 	SDL_DestroyRenderer(rend);
 	SDL_DestroyWindow(win);
 	SDL_Quit();
-	
+
+	// threading end
+	pthread_join(recv_thread, NULL);	
 }
