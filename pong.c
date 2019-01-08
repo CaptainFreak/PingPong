@@ -7,7 +7,6 @@ Author:CaptainFreak
 
 */
 
-
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include <sys/types.h>
@@ -29,18 +28,15 @@ struct player_thread_info {
 	int *write_dest[4]; // array of pointers, each pointer points to an int
 };
 
-// physics globals
-SDL_Rect dest,plank_dest,plank2_dest;
-
 // "connected" will allow main thread to begin only when there is a connection
 pthread_mutex_t connected_mutex = PTHREAD_MUTEX_INITIALIZER;
 int connected = 0;
 // "physics" will allow "updateOpponentPosition" thread to update physics
 // "physics" will also allow main thread to read physics
+// TODO: remove mutex?
 pthread_mutex_t physics_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void error(char *msg){
-
 	perror(msg);
 	exit(0);
 }
@@ -66,11 +62,13 @@ void *updateOpponentPosition(void *ptr) {
 	while(1) {
 		n = recvfrom(pti->recv_socket, buf, sizeof(int) * 4, 0,
 			&server, &servlen);
-		pthread_mutex_lock(&physics_mutex);
+		// TODO: remove mutex?
+		//pthread_mutex_lock(&physics_mutex);
 		for(int i = 0; i < looplen; i++) {
 			*(pti->write_dest[i]) = ntohl(buf[i]);
 		}
-		pthread_mutex_unlock(&physics_mutex);
+		// TODO: remove mutex?
+		//pthread_mutex_unlock(&physics_mutex);
 	}
 }
 
@@ -126,7 +124,7 @@ int main(int argc, char *argv[]){
 		return 1;
 	}
 
-	//SDL_Rect dest,plank_dest,plank2_dest;
+	SDL_Rect dest,plank_dest,plank2_dest;
 	SDL_QueryTexture(tex,NULL,NULL,&dest.w,&dest.h);
 	dest.w/=30;
 	dest.h/=30;
@@ -218,6 +216,7 @@ int main(int argc, char *argv[]){
 	}
 	pthread_mutex_unlock(&connected_mutex);
 
+	// begin main game loop
 	while(!close_req){
 		SDL_Event event;
 		while(SDL_PollEvent(&event)){
@@ -283,34 +282,8 @@ int main(int argc, char *argv[]){
 
 	}
 
-
+	// ball physics done in player 1
 	if(p==1){
-		// update the ball
-		if(x_pos<=0){
-			x_pos=0;
-			x_vel=-x_vel;
-		}
-		if(y_pos<=0){
-			y_pos=0;
-			y_vel=-y_vel;
-		}
-		if(x_pos>=WINDOW_WIDTH-dest.w){
-			x_pos=WINDOW_WIDTH-dest.w;
-			x_vel=-x_vel;
-		}
-		if(y_pos>=WINDOW_HEIGHT-dest.h){
-			y_pos=WINDOW_HEIGHT-dest.h;
-			y_vel=-y_vel;
-		}
-		if(x_pos>=WINDOW_WIDTH-dest.w-plank_dest.w && (y_pos>=plank_y_pos-dest.h && y_pos<=plank_y_pos+plank_dest.h)){
-			score++;
-			//printf("%d\n",score);
-			x_pos=WINDOW_WIDTH-dest.w-plank_dest.w;
-			x_vel=-x_vel;
-		}
-
-	
-
 		// update player 1 plank
 		if(plank_y_pos<=0){
 			plank_y_pos=0;
@@ -328,11 +301,48 @@ int main(int argc, char *argv[]){
 			plank_y_vel=0;
 		}
 
+		// update the ball
+		// hit left wall?
+		if(x_pos<=0){
+			x_pos=0;
+			x_vel=-x_vel;
+		}
+		// hit right wall?
+		if(x_pos>=WINDOW_WIDTH-dest.w){
+			x_pos=WINDOW_WIDTH-dest.w;
+			x_vel=-x_vel;
+		}
+
+		// hit top?
+		if(y_pos<=0){
+			printf("hit top\n");
+			y_pos=0;
+			y_vel=-y_vel;
+		}
+		// hit bottom?
+		if(y_pos>=WINDOW_HEIGHT-dest.h){
+			printf("hit bottom\n");
+			y_pos=WINDOW_HEIGHT-dest.h;
+			y_vel=-y_vel;
+		}
+
+		// hit player 1?
+		if(x_pos>=WINDOW_WIDTH-dest.w-plank_dest.w && (y_pos>=plank_y_pos-dest.h && y_pos<=plank_y_pos+plank_dest.h)){
+			printf("ball hit\n");
+			score++;
+			//printf("%d\n",score);
+			x_pos=WINDOW_WIDTH-dest.w-plank_dest.w;
+			x_vel=-x_vel*1.01f;
+			y_vel*=1.01f;
+		}
+
+		// hit player 2?
 		if(x_pos<=plank2_dest.w && (y_pos>=plank2_y_pos-dest.h && y_pos<=plank2_y_pos+plank2_dest.h)){
 			score2++;
 			//printf("player 2:%d\n",score);
 			x_pos=plank2_dest.w;
-			x_vel=-x_vel;
+			x_vel=-x_vel*1.01f;
+			y_vel*=1.01f;
 		}
 
 	}if(p==2){	
@@ -360,16 +370,21 @@ int main(int argc, char *argv[]){
 		plank_y_pos+=plank_y_vel/50;
 		plank2_y_pos+=plank2_y_vel/50;
 		
+		// TODO: remove mutex?
 		// critical region start
-		pthread_mutex_lock(&physics_mutex);
+		//pthread_mutex_lock(&physics_mutex);
 
-		// this thread updates one part of physics data
+		// this thread updates one part of display data
 		// the other thread (the listener) updates the second part
 		if(p == 1) {
+			// update display data
 			dest.y=(int)y_pos;
 			dest.x=(int)x_pos;
 			plank_dest.y=(int)plank_y_pos;
 			plank_dest.x=(int)plank_x_pos;
+			// put plank2 data into physics
+			plank2_y_pos = (float) plank2_dest.y;
+			plank2_x_pos = (float) plank2_dest.x;
 		} else if(p == 2) {
 			plank2_dest.y=(int)plank2_y_pos;
 			plank2_dest.x=(int)plank2_x_pos;
@@ -378,7 +393,6 @@ int main(int argc, char *argv[]){
 		if(p==1){
 			// send position data of ball and player 1 to server
 			
-			// TODO: locks
 			// prepare data
 			p1buf[0] = htonl(dest.x);
 			p1buf[1] = htonl(dest.y);
@@ -413,8 +427,9 @@ int main(int argc, char *argv[]){
 		SDL_RenderPresent(rend);
 		SDL_Delay(1000/60);
 
+		// TODO: remove mutex?
 		// critical region end
-		pthread_mutex_unlock(&physics_mutex);
+		//pthread_mutex_unlock(&physics_mutex);
 	}
 
 	SDL_DestroyTexture(tex);
